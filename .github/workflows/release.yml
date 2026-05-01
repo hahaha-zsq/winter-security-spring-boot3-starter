@@ -30,31 +30,41 @@ jobs:
         with:
           java-version: '17'
           distribution: 'temurin'
-          cache: 'maven'  # 启用 Maven 缓存以加速构建
-          gpg-private-key: ${{ secrets.GPG_PRIVATE_KEY }}  # 从 GitHub 仓库密钥中获取 GPG 私钥
-          gpg-passphrase: ${{ secrets.GPG_PASSPHRASE }}  # 从 GitHub 仓库密钥中获取 GPG 密码
+          cache: 'maven'
 
-      - name: Import GPG key  # 导入 GPG 密钥用于签名
+      - name: Import GPG key
+        uses: crazy-max/ghaction-import-gpg@v6
+        with:
+          gpg_private_key: ${{ secrets.GPG_PRIVATE_KEY }}
+          gpg_passphrase: ${{ secrets.GPG_PASSPHRASE }}
+          git_committer_name: github-actions[bot]
+          git_committer_email: github-actions[bot]@users.noreply.github.com
+
+      - name: Configure Maven settings
         run: |
-          echo "${{ secrets.GPG_PRIVATE_KEY }}" | gpg --batch --import
-          gpg --list-secret-keys --keyid-format LONG
-      - name: Configure Maven settings.xml  # 配置 Maven 设置文件
-        run: |
-          mkdir -p ~/.m2  
-          cat > ~/.m2/settings.xml <<EOF  
+          mkdir -p ~/.m2
+          cat > ~/.m2/settings.xml <<EOF
           <settings>
             <servers>
               <server>
-                <id>dadandiaoming-maven</id>  
-                <username>${{ secrets.MAVEN_USERNAME }}</username>  
-                <password>${{ secrets.MAVEN_TOKEN }}</password> 
+                <id>dadandiaoming-maven</id>
+                <username>${{ secrets.MAVEN_USERNAME }}</username>
+                <password>${{ secrets.MAVEN_TOKEN }}</password>
               </server>
             </servers>
           </settings>
           EOF
 
-      - name: Build and Publish  # 构建项目并发布到 Maven 中央仓库
-        run: |
-          GPG_KEY_ID=$(gpg --list-secret-keys --keyid-format LONG | grep sec | awk '{print $2}' | cut -d'/' -f2)
-          echo "Using GPG key: $GPG_KEY_ID"
-          mvn clean deploy -Dgpg.keyname=$GPG_KEY_ID -Dgpg.passphrase=${{ secrets.GPG_PASSPHRASE }} -DskipTests
+      - name: Build and Publish
+        run: mvn clean deploy -DskipTests
+
+      - name: Create GitHub Release
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: true
+          files: |
+            target/*.jar
+            target/*.pom
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

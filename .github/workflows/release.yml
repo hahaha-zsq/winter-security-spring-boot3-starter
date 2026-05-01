@@ -51,7 +51,9 @@ jobs:
         run: |
           mkdir -p ~/.gnupg
           chmod 700 ~/.gnupg
-          echo "$GPG_PRIVATE_KEY" | gpg --batch --yes --passphrase "$GPG_PASSPHRASE" --import
+          printf '%s\n' "$GPG_PRIVATE_KEY" > /tmp/gpg-key.asc
+          gpg --batch --yes --passphrase "$GPG_PASSPHRASE" --import /tmp/gpg-key.asc
+          rm /tmp/gpg-key.asc
           gpg --list-secret-keys
         env:
           GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}

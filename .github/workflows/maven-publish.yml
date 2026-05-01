@@ -30,10 +30,24 @@ jobs:
           cache: 'maven'
 
       - name: Import GPG key
+        env:
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
         run: |
-          echo "${{ secrets.GPG_PRIVATE_KEY }}" | gpg --batch --import
-          GPG_KEY_ID=$(gpg --list-secret-keys --keyid-format LONG | grep sec | awk '{print $2}' | cut -d'/' -f2)
+          # 将密钥写入临时文件再导入（更可靠）
+          echo "$GPG_PRIVATE_KEY" > /tmp/gpg-key.asc
+          gpg --batch --yes --pinentry-mode loopback --import /tmp/gpg-key.asc 2>&1
+          # 验证导入成功
+          gpg --list-secret-keys --keyid-format LONG
+          # 提取 Key ID
+          GPG_KEY_ID=$(gpg --list-secret-keys --keyid-format LONG 2>/dev/null | grep '^sec' | head -1 | awk '{print $2}' | cut -d'/' -f2)
+          if [ -z "$GPG_KEY_ID" ]; then
+            echo "ERROR: Failed to import GPG key or extract Key ID"
+            exit 1
+          fi
           echo "GPG_KEY_ID=$GPG_KEY_ID" >> $GITHUB_ENV
+          echo "Imported GPG Key ID: $GPG_KEY_ID"
+          # 清理临时文件
+          rm -f /tmp/gpg-key.asc
 
       - name: Configure Maven settings.xml
         run: |

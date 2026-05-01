@@ -36,7 +36,7 @@ jobs:
         uses: crazy-max/ghaction-import-gpg@v6
         with:
           gpg_private_key: ${{ secrets.GPG_PRIVATE_KEY }}
-          gpg_passphrase: ${{ secrets.GPG_PASSPHRASE }}
+          passphrase: ${{ secrets.GPG_PASSPHRASE }}
           git_committer_name: github-actions[bot]
           git_committer_email: github-actions[bot]@users.noreply.github.com
 

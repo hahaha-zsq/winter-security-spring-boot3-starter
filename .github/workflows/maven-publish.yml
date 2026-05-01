@@ -1,47 +1,65 @@
-name: Publish to Maven Central  # 发布到 Maven 中央仓库的工作流名称
+name: Publish to Maven Central
 
 on:
   push:
     tags:
-      - 'v*'   # 只有推送带有 v 前缀的标签时才触发此工作流（如 v1.0.0）
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  publish:  # 定义一个名为 publish 的作业
-    runs-on: ubuntu-latest  # 在最新版本的 Ubuntu 运行环境中执行
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
 
     steps:
-      - name: Checkout code  # 检出代码
-        uses: actions/checkout@v4  # 使用官方的 checkout action v4 版本
-      - name: Set up JDK 17  # 设置 Java 开发环境
-        uses: actions/setup-java@v4  # 使用官方的 setup-java action v4 版本
-        with:
-          distribution: 'temurin'  # 使用 Eclipse Temurin 发行版的 JDK
-          java-version: '17'  # 指定 Java 版本为 8
-          cache: 'maven'  # 启用 Maven 缓存以加速构建
-          gpg-private-key: ${{ secrets.GPG_PRIVATE_KEY }}  # 从 GitHub 仓库密钥中获取 GPG 私钥
-          gpg-passphrase: ${{ secrets.GPG_PASSPHRASE }}  # 从 GitHub 仓库密钥中获取 GPG 密码
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-      - name: Import GPG key  # 导入 GPG 密钥用于签名
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+          cache: 'maven'
+
+      - name: Import GPG key
         run: |
           echo "${{ secrets.GPG_PRIVATE_KEY }}" | gpg --batch --import
-          gpg --list-secret-keys --keyid-format LONG
-      - name: Configure Maven settings.xml  # 配置 Maven 设置文件
+          GPG_KEY_ID=$(gpg --list-secret-keys --keyid-format LONG | grep sec | awk '{print $2}' | cut -d'/' -f2)
+          echo "GPG_KEY_ID=$GPG_KEY_ID" >> $GITHUB_ENV
+
+      - name: Configure Maven settings.xml
         run: |
-          mkdir -p ~/.m2  
-          cat > ~/.m2/settings.xml <<EOF  
+          mkdir -p ~/.m2
+          cat > ~/.m2/settings.xml <<EOF
           <settings>
             <servers>
               <server>
-                <id>dadandiaoming-maven</id>  
-                <username>${{ secrets.OSSRH_USERNAME }}</username>  
-                <password>${{ secrets.OSSRH_PASSWORD }}</password> 
+                <id>ossrh</id>
+                <username>${{ secrets.OSSRH_USERNAME }}</username>
+                <password>${{ secrets.OSSRH_PASSWORD }}</password>
+              </server>
+              <server>
+                <id>dadandiaomin-maven</id>
+                <username>${{ secrets.OSSRH_USERNAME }}</username>
+                <password>${{ secrets.OSSRH_PASSWORD }}</password>
               </server>
             </servers>
           </settings>
           EOF
 
-      - name: Build and Publish  # 构建项目并发布到 Maven 中央仓库
+      - name: Build and Publish
         run: |
-          GPG_KEY_ID=$(gpg --list-secret-keys --keyid-format LONG | grep sec | awk '{print $2}' | cut -d'/' -f2)
-          echo "Using GPG key: $GPG_KEY_ID"
-          mvn clean deploy -Dgpg.keyname=$GPG_KEY_ID -Dgpg.passphrase=${{ secrets.GPG_PASSPHRASE }} -DskipTests
+          mvn clean deploy \
+            -Dgpg.keyname=${{ env.GPG_KEY_ID }} \
+            -Dgpg.passphrase=${{ secrets.GPG_PASSPHRASE }} \
+            -DskipTests
+        env:
+          MAVEN_GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
